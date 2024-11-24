@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import './checkout.css';
+import './GameSelection.css';
 
 const PaymentForm = ({ cartTotal }) => {
   const [email, setEmail] = useState('');
@@ -27,7 +27,7 @@ const PaymentForm = ({ cartTotal }) => {
     setPaymentMethods(updatedMethods);
   };
 
-  const handleCustomerSetup = async () => {
+  const handleCustomerSetup = useCallback(async () => {
     try {
       const response = await fetch('http://localhost:3002/api/customers', {
         method: 'POST',
@@ -39,13 +39,14 @@ const PaymentForm = ({ cartTotal }) => {
     } catch (error) {
       console.error('Error fetching or creating customer:', error);
     }
-  };
-
+  }, [email, phone]);
+  
   useEffect(() => {
     if (email || phone) {
       handleCustomerSetup();
     }
-  }, [email, phone]);
+  }, [handleCustomerSetup]);
+  
 
   const handlePaymentSubmit = async (event) => {
     event.preventDefault();

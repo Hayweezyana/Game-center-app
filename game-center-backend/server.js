@@ -59,6 +59,12 @@ io.on('connection', (socket) => {
         console.log('Game event data:', data);
     });
 
+    const queueNamespace = io.of('/queue');
+queueNamespace.on('connection', (socket) => {
+  console.log(`Client connected: ${socket.id}`);
+
+ 
+
     // Handle queue events
     socket.on('queueEvent', async () => {
         if (!Queue) {
@@ -75,6 +81,11 @@ io.on('connection', (socket) => {
             socket.emit('error', 'Failed to fetch initial queue.');
         }
     });
+     // Handle disconnection
+  socket.on('disconnect', () => {
+    console.log(`Client disconnected: ${socket.id}`);
+  });
+});
 
     // Handle PC events
     socket.on('somePCEvent', (data) => {
@@ -95,6 +106,25 @@ io.on('connection', (socket) => {
         console.log('Client disconnected:', socket.id);
     });
 });
+
+app.post('/api/queue', async (req, res) => {
+    try {
+      const newQueueEntry = await Queue.create({
+        customer_id: req.body.customer_id,
+        status: req.body.status || 'waiting',
+  });
+
+  // Fetch updated queue and emit event
+  const updatedQueue = await Queue.findAll({ order: [['created_at', 'ASC']] });
+  io.of('/queue').emit('queueUpdate', updatedQueue);
+
+  res.status(201).json(newQueueEntry);
+} catch (error) {
+  console.error('Error adding to queue:', error);
+  res.status(500).json({ error: 'Internal server error' });
+}
+});
+  
 
 // Stripe payment endpoint
 app.post("/create-payment-intent", async (req, res) => {
@@ -138,6 +168,7 @@ const sendNotification = async (customerPhoneNumber, message) => {
 // Function to assign the next customer to an available PC
 const assignNextCustomer = async (game_id) => {
     const sortedQueue = await Queue.findAll({ where: { game_id }, order: [['created_at', 'ASC']] });
+
     if (sortedQueue.length > 0) {
         const nextCustomer = sortedQueue[0];
         const availablePC = await PC.findOne({
@@ -149,14 +180,16 @@ const assignNextCustomer = async (game_id) => {
             await PC.update({ status: 'busy' }, { where: { id: availablePC.id } });
             await Queue.destroy({ where: { customer_id: nextCustomer.customer_id } });
 
-            // Emit updates to clients
+            // Emit updated queue and customer assignment
             const updatedQueue = await Queue.findAll({ order: [['created_at', 'ASC']] });
             io.emit('queueUpdate', updatedQueue);
             io.emit('customerAssigned', { customer_id: nextCustomer.customer_id, pc: availablePC });
+
             console.log(`Customer ${nextCustomer.customer_id} assigned to PC ${availablePC.id}`);
         }
     }
 };
+
 
 // Start server and sync database
 const startServer = async () => {

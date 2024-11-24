@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import io from 'socket.io-client';
+import { io } from 'socket.io-client';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import './GameSelection.css';
 
-const socket = io('http://localhost:3002'); // Ensure backend server is running here
+const socket = io('http://localhost:3002');
 
 const QueueStatus = () => {
   const [queue, setQueue] = useState([]);
@@ -32,20 +33,21 @@ const QueueStatus = () => {
     }
   };
 
-  // Fetch membership types based on customer IDs
+  // Fetch membership types
   const fetchMembershipTypes = async (customerIds) => {
-    if (customerIds.length === 0) return; // Skip if no customer IDs
+    if (!customerIds.length) return;
+
     try {
       const response = await axios.post('http://localhost:3002/api/customers/membership_level', {
         customer_ids: customerIds,
       });
-      setMembershipTypes(response.data); // Assumes response is a mapping of customer_id to membership level
+      setMembershipTypes(response.data);
     } catch (error) {
       console.error('Error fetching membership types:', error);
     }
   };
 
-  // Fetch available games
+  // Fetch games
   const fetchGames = async () => {
     try {
       const response = await axios.get('http://localhost:3002/api/games');
@@ -55,33 +57,21 @@ const QueueStatus = () => {
     }
   };
 
-  // Initial data fetch and setup Socket.IO
   useEffect(() => {
-    // Fetch initial data
-    const fetchData = async () => {
-      try {
-        await Promise.all([fetchQueue(), fetchAvailablePCs(), fetchGames()]);
-      } catch (error) {
-        console.error('Error fetching initial data:', error);
-      }
-    };
-    fetchData();
-
-    // Setup Socket.IO listeners
-    socket.on('connect', () => {
-      console.log('Connected to Socket.IO server');
-    });
+    fetchQueue();
+    fetchAvailablePCs();
+    fetchGames();
 
     socket.on('queueUpdate', (updatedQueue) => {
-      console.log('Received queue update:', updatedQueue);
+      if (Array.isArray(updatedQueue)) {
+        console.log('Updating queue state:', updatedQueue);
       setQueue(updatedQueue);
-
-      // Fetch updated membership types
-      const customerIds = updatedQueue.map((item) => item.customer_id);
-      fetchMembershipTypes(customerIds);
+      fetchMembershipTypes(updatedQueue.map((item) => item.customer_id));
+    } else {
+      console.warn('Received invalid queue data:', updatedQueue);
+    }
     });
 
-    // Cleanup Socket.IO on component unmount
     return () => {
       socket.off('queueUpdate');
     };
@@ -90,8 +80,6 @@ const QueueStatus = () => {
   return (
     <div>
       <h2>Queue Status</h2>
-
-      {/* Display queue */}
       <div>
         <h3>Current Queue</h3>
         {queue.length > 0 ? (
@@ -108,35 +96,24 @@ const QueueStatus = () => {
         )}
       </div>
 
-      {/* Display available PCs */}
       <div>
         <h3>Available PCs</h3>
         {availablePCs.length > 0 ? (
-          <ul>
-            {availablePCs.map((pc) => (
-              <li key={pc.id}>PC {pc.id} is available</li>
-            ))}
-          </ul>
+          <ul>{availablePCs.map((pc) => <li key={pc.id}>PC {pc.id}</li>)}</ul>
         ) : (
           <p>No PCs are currently available.</p>
         )}
       </div>
 
-      {/* Display games */}
       <div>
         <h3>Games</h3>
         {games.length > 0 ? (
-          <ul>
-            {games.map((game) => (
-              <li key={game.id}>{game.title}</li>
-            ))}
-          </ul>
+          <ul>{games.map((game) => <li key={game.id}>{game.title}</li>)}</ul>
         ) : (
           <p>No games available.</p>
         )}
       </div>
 
-      {/* Button to navigate to Queue page */}
       <button onClick={() => navigate('/queue')}>Proceed to Queue</button>
     </div>
   );

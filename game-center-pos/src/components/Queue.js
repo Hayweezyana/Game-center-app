@@ -13,9 +13,6 @@ import {
 import { io } from 'socket.io-client';
 import './GameSelection.css';
 
-// Connect to Queue namespace
-const queueSocket = io('http://localhost:3002/api/queue'); // Updated namespace
-
 const Queue = () => {
   const [queue, setQueue] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -25,11 +22,7 @@ const Queue = () => {
     try {
       const response = await fetch('http://localhost:3002/api/queue');
       const data = await response.json();
-      if (Array.isArray(data)) {
-        setQueue(data);
-      } else {
-        console.error('Queue data is not an array:', data);
-      }
+      setQueue(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching queue data:', error);
     } finally {
@@ -37,10 +30,10 @@ const Queue = () => {
     }
   };
 
-  // Requeue customer action
+  // Handle requeue action
   const handleRequeue = async (id) => {
     try {
-      const response = await fetch(`http://localhost:3002/api/queue/requeue`, {
+      const response = await fetch('http://localhost:3002/api/queue/requeue', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -48,33 +41,26 @@ const Queue = () => {
         body: JSON.stringify({ id }),
       });
       const result = await response.json();
-      if (result.success) {
-        alert(`Customer ${id} successfully requeued!`);
-      } else {
-        alert(`Failed to requeue customer ${id}.`);
-      }
+      alert(result.success ? `Customer ${id} successfully requeued!` : `Failed to requeue customer ${id}.`);
     } catch (error) {
       console.error('Error requeuing customer:', error);
     }
   };
 
   useEffect(() => {
-    // Fetch initial queue data
+    console.log('Connecting to Socket.IO...');
+
+    // Correct namespace connection
+    const socket = io('http://localhost:3002/queue'); // Connect to the "/queue" namespace
+
     fetchQueue();
 
     // Set up Socket.IO listeners
-    queueSocket.on('connect', () => {
-      console.log('Connected to /queue namespace');
-    });
+    socket.on('queueUpdate', (updatedQueue) => setQueue(updatedQueue));
 
-    queueSocket.on('queueUpdate', (updatedQueue) => {
-      console.log('Received queue update:', updatedQueue);
-      setQueue(updatedQueue);
-    });
-
-    // Cleanup socket listeners on component unmount
+    // Clean up socket connection
     return () => {
-      queueSocket.off('queueUpdate');
+      socket.disconnect();
     };
   }, []);
 
@@ -101,20 +87,16 @@ const Queue = () => {
           <TableBody>
             {queue.map((customer, index) => (
               <TableRow key={customer.id}>
-                <TableCell>{index + 1}</TableCell> {/* Display position in the queue */}
+                <TableCell>{index + 1}</TableCell>
                 <TableCell>{customer.customer_name}</TableCell>
                 <TableCell>{customer.game}</TableCell>
                 <TableCell>{customer.status}</TableCell>
                 <TableCell>
-                  {customer.status === 'Waiting' && (
-                    <Button
-                      variant="contained"
-                      color="primary"
-                      onClick={() => handleRequeue(customer.id)}>
+                  {customer.status === 'Waiting' ? (
+                    <Button variant="contained" color="primary" onClick={() => handleRequeue(customer.id)}>
                       Requeue
                     </Button>
-                  )}
-                  {customer.status === 'Playing' && (
+                  ) : (
                     <Button variant="outlined" color="secondary" disabled>
                       Playing
                     </Button>
