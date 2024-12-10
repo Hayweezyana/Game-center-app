@@ -3,16 +3,13 @@ import React, { useEffect, useState } from 'react';
 import io from 'socket.io-client';
 
 // Connect to the default namespace
-const socket = io('http://localhost:3002');
+const socket = io(process.env.REACT_APP_BACKEND_URL);
 
-// PC namespace
-const pcsSocket = io('http://localhost:3002/api/pcs/available');
-
-pcsSocket.on('connect', () => {
+socket.on('connect', () => {
     console.log('Connected to /pcs namespace');
 });
 
-pcsSocket.on('somePCEvent', (data) => {
+socket.on('somePCEvent', (data) => {
     console.log('Received pcs event:', data);
 });
 

@@ -1,121 +1,110 @@
 import React, { useEffect, useState } from 'react';
-import { io } from 'socket.io-client';
 import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
-import './GameSelection.css';
+import { io } from 'socket.io-client';
+import { Container, Typography, Table, TableHead, TableRow, TableCell, TableBody, Button } from '@mui/material';
 
-const socket = io('http://localhost:3002');
+const socket = io(process.env.REACT_APP_BACKEND_URL, { transports: ['websocket', 'polling'] });
+
+const CountdownTimer = ({ duration }) => {
+  const [remainingTime, setRemainingTime] = useState(duration);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setRemainingTime((prev) => Math.max(prev - 1, 0));
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <span>
+      {Math.floor(remainingTime / 60)}m {remainingTime % 60}s
+    </span>
+  );
+};
 
 const QueueStatus = () => {
   const [queue, setQueue] = useState([]);
-  const [availablePCs, setAvailablePCs] = useState([]);
-  const [membershipTypes, setMembershipTypes] = useState({});
   const [games, setGames] = useState([]);
-  const navigate = useNavigate();
 
-  // Fetch queue data
   const fetchQueue = async () => {
     try {
-      const response = await axios.get('http://localhost:3002/api/queue');
-      setQueue(response.data);
+      const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}/api/queue`);
+      setQueue(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Error fetching queue:', error);
     }
   };
 
-  // Fetch available PCs
-  const fetchAvailablePCs = async () => {
-    try {
-      const response = await axios.get('http://localhost:3002/api/pcs/available');
-      setAvailablePCs(response.data);
-    } catch (error) {
-      console.error('Error fetching available PCs:', error);
-    }
-  };
-
-  // Fetch membership types
-  const fetchMembershipTypes = async (customerIds) => {
-    if (!customerIds.length) return;
-
-    try {
-      const response = await axios.post('http://localhost:3002/api/customers/membership_level', {
-        customer_ids: customerIds,
-      });
-      setMembershipTypes(response.data);
-    } catch (error) {
-      console.error('Error fetching membership types:', error);
-    }
-  };
-
-  // Fetch games
   const fetchGames = async () => {
     try {
-      const response = await axios.get('http://localhost:3002/api/games');
-      setGames(response.data);
+      const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}/api/games`);
+      setGames(response.data || []);
     } catch (error) {
       console.error('Error fetching games:', error);
     }
   };
 
+  const handleAssignPCs = async () => {
+    try {
+      await axios.post(`${process.env.REACT_APP_BACKEND_URL}/api/queue/assign-pcs`);
+      fetchQueue();
+    } catch (error) {
+      console.error('Error assigning PCs:', error);
+    }
+  };
+
   useEffect(() => {
     fetchQueue();
-    fetchAvailablePCs();
     fetchGames();
-
-    socket.on('queueUpdate', (updatedQueue) => {
-      if (Array.isArray(updatedQueue)) {
-        console.log('Updating queue state:', updatedQueue);
-      setQueue(updatedQueue);
-      fetchMembershipTypes(updatedQueue.map((item) => item.customer_id));
-    } else {
-      console.warn('Received invalid queue data:', updatedQueue);
-    }
-    });
-
-    return () => {
-      socket.off('queueUpdate');
-    };
+    socket.on('queueUpdate', (updatedQueue) => setQueue(updatedQueue));
+    return () => socket.off('queueUpdate');
   }, []);
 
+  const getGameTitle = (gameId) => {
+    const game = games.find((g) => g.id === gameId);
+    return game ? game.title : 'Unknown Game';
+  };
+
   return (
-    <div>
-      <h2>Queue Status</h2>
-      <div>
-        <h3>Current Queue</h3>
-        {queue.length > 0 ? (
-          <ul>
-            {queue.map((item) => (
-              <li key={item.id}>
-                Customer {item.customer_id} is waiting for Game {item.game_id}
-                {membershipTypes[item.customer_id] && ` (${membershipTypes[item.customer_id]} Membership)`}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p>No customers in the queue.</p>
-        )}
-      </div>
-
-      <div>
-        <h3>Available PCs</h3>
-        {availablePCs.length > 0 ? (
-          <ul>{availablePCs.map((pc) => <li key={pc.id}>PC {pc.id}</li>)}</ul>
-        ) : (
-          <p>No PCs are currently available.</p>
-        )}
-      </div>
-
-      <div>
-        <h3>Games</h3>
-        {games.length > 0 ? (
-          <ul>{games.map((game) => <li key={game.id}>{game.title}</li>)}</ul>
-        ) : (
-          <p>No games available.</p>
-        )}
-      </div>
-
-      <button onClick={() => navigate('/queue')}>Proceed to Queue</button>
-    </div>
+    <Container>
+      <Typography variant="h4" align="center" gutterBottom>
+        Queue Status
+      </Typography>
+      <Button variant="contained" color="primary" onClick={handleAssignPCs}>
+        Assign PCs
+      </Button>
+      <Table>
+        <TableHead>
+          <TableRow>
+            <TableCell>Queue ID</TableCell>
+            <TableCell>Customer ID</TableCell>
+            <TableCell>Game</TableCell>
+            <TableCell>Status</TableCell>
+            <TableCell>PC</TableCell>
+            <TableCell>Remaining Time</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {queue.map((entry) => (
+            <TableRow key={entry.id}>
+              <TableCell>{entry.id}</TableCell>
+              <TableCell>{entry.customer?.id || 'N/A'}</TableCell>
+              <TableCell>{getGameTitle(entry.game_id)}</TableCell>
+              <TableCell>
+                {entry.status === 'Playing' ? <CountdownTimer duration={entry.playDuration} /> : entry.status}
+              </TableCell>
+              <TableCell>{entry.pc?.id ? `PC-${entry.pc.id}` : 'Waiting for PC'}</TableCell>
+              <TableCell>
+                {entry.remaining_time > 0
+                  ? `${Math.floor(entry.remaining_time / 60)}m ${entry.remaining_time % 60}s`
+                  : 'N/A'}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </Container>
   );
 };
 

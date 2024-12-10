@@ -1,5 +1,6 @@
 // models/pcs.js
-module.exports = (sequelize, DataTypes) => {
+const { DataTypes } = require('sequelize');
+module.exports = (sequelize) => {
     const PC = sequelize.define(
       'PC',
       {
@@ -7,11 +8,12 @@ module.exports = (sequelize, DataTypes) => {
           type: DataTypes.INTEGER,
           primaryKey: true,
           allowNull: false,
+          autoIncrement: true,
         },
         status: {
           type: DataTypes.STRING, // Use BOOLEAN if you only need true/false for 'busy'/'free'
           allowNull: false,
-          defaultValue: 'free', // Default status if desired
+          defaultValue: 'available', // Default status if desired
         },
       },
       {
@@ -20,7 +22,12 @@ module.exports = (sequelize, DataTypes) => {
         freezeTableName: true, // Ensures 'pcs' remains as table name
       }
     );
-  
+
+    PC.associate = (models) => {
+    PC.hasMany(models.Queue, { foreignKey: 'id', as: 'queues' });
+    };
+
     return PC;
   };
+  
   

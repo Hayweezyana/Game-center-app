@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { Games, Queue, Payments, PCs } = require('../models'); // Ensure these models are correctly defined
 const { Op } = require('sequelize'); // Sequelize operators
-const stripe = require('stripe')('your-stripe-secret-key'); // Replace with your Stripe secret key
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 // Fetch all games
 router.get('/api/games', async (req, res) => {
@@ -11,41 +11,6 @@ router.get('/api/games', async (req, res) => {
     res.status(200).json(gameList);
   } catch (error) {
     console.error('Error fetching games:', error.message);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// Add a customer to the queue
-router.post('/api/queue', async (req, res) => {
-  const { customer_id, game_id, membership_level } = req.body;
-
-  if (!customer_id || !game_id || !membership_level) {
-    return res.status(400).json({
-      error: 'customer_id, game_id, and membership_level are required.',
-    });
-  }
-
-  try {
-    const newQueueEntry = await Queue.create({
-      customer_id,
-      game_id,
-      membership_level,
-      created_at: new Date(),
-    });
-
-    // Emit updated queue to Socket.IO clients
-    const updatedQueue = await Queue.findAll({
-      order: [['created_at', 'ASC']],
-    });
-
-    const io = req.app.get('io');
-    if (io) {
-      io.emit('queueUpdate', updatedQueue);
-    }
-
-    res.status(201).json({ message: 'Customer added to queue', queue: newQueueEntry });
-  } catch (error) {
-    console.error('Error adding to queue:', error.message);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

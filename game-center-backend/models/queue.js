@@ -1,49 +1,61 @@
 const { DataTypes } = require('sequelize');
 
 module.exports = (sequelize) => {
-    const Queue = sequelize.define(
-      'Queue',
-      {
-        id: {
-          type: DataTypes.INTEGER,
-          allowNull: false,
-          primaryKey: true,
-          autoIncrement: true
-        },
-        customer_id: {
-          type: DataTypes.STRING,
-          allowNull: false,
-        },
-        game_id: {
-          type: DataTypes.INTEGER,
-          allowNull: false,
-        },
-        pc_id: {
-          type: DataTypes.INTEGER,
-          allowNull: false,
-        },
-        membership_level: DataTypes.STRING,
-        created_at: {
-          type: DataTypes.DATE, // Alternatively, use Sequelize's createdAt timestamp
-          allowNull: false,
-          defaultValue: DataTypes.NOW,
-        },
-        status: DataTypes.STRING,
+  const Queue = sequelize.define(
+    'Queue',
+    {
+      id: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        primaryKey: true,
+        autoIncrement: true,
       },
-      {
-        tableName: 'queue', // Explicit table name
-        timestamps: true, // Disable Sequelize's auto timestamps if custom timestamps are not required
-        freezeTableName: true, // Prevents Sequelize from pluralizing the table name
-        underscored: true,
-      }
-    );
-  
-    Queue.associate = (models) => {
-      Queue.belongsTo(models.Game, { foreignKey: 'game_id' });
-      Queue.belongsTo(models.PC, { foreignKey: 'pc_id' });
-      Queue.belongsTo(models.Customer, { foreignKey: 'customer_id' });
-    };
-  
-    return Queue;
+      customer_id: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+      },
+      game_id: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+      },
+      pc_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+      },
+      countdown: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+      },
+      remaining_time: {
+        type: DataTypes.INTEGER, // Time in seconds
+        allowNull: true,
+      },
+      membership_level: {
+        type: DataTypes.STRING,
+        defaultValue: 'BRONZE',
+      },
+      created_at: {
+        type: DataTypes.DATE,
+        allowNull: false,
+        defaultValue: DataTypes.NOW,
+      },
+      status: {
+        type: DataTypes.STRING,
+        defaultValue: 'waiting',
+      },
+    },
+    {
+      tableName: 'queue',
+      timestamps: false,
+      underscored: true,
+    }
+  );
+
+  Queue.associate = (models) => {
+    Queue.belongsTo(models.Game, { foreignKey: 'id', as: 'game' });
+    Queue.belongsTo(models.PC, { foreignKey: 'id', as: 'pc' });
+    Queue.belongsTo(models.Customer, { foreignKey: 'customer_id', as: 'customer' });
   };
-  
+
+  return Queue;
+};

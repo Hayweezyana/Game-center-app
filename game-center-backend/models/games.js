@@ -16,7 +16,11 @@ module.exports = (sequelize, DataTypes) => {
       price: {
           type: DataTypes.INTEGER,
           allowNull: false
-      }
+      },
+      time_slot:{
+        type: DataTypes.INTEGER,
+        allowNull: false
+      },
       
   }, {
     tableName: 'games',

@@ -1,67 +1,84 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import {
   Container,
-  Button,
   Typography,
   Table,
   TableHead,
   TableRow,
   TableCell,
   TableBody,
-  CircularProgress,
 } from '@mui/material';
 import { io } from 'socket.io-client';
-import './GameSelection.css';
+
+const socket = io(process.env.REACT_APP_BACKEND_URL, { transports: ['websocket', 'polling'] });
 
 const Queue = () => {
   const [queue, setQueue] = useState([]);
+  const [timers, setTimers] = useState({});
   const [loading, setLoading] = useState(true);
 
-  // Fetch initial queue data
+  // Fetch queue from the backend
   const fetchQueue = async () => {
     try {
-      const response = await fetch('http://localhost:3002/api/queue');
-      const data = await response.json();
-      setQueue(Array.isArray(data) ? data : []);
+      const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}/api/queue`);
+      const queueData = Array.isArray(response.data) ? response.data : [];
+
+      setQueue(queueData);
+
+      // Initialize timers for "playing" status
+      const initialTimers = {};
+      queueData.forEach((entry) => {
+        if (entry.status === 'playing' && entry.remaining_time) {
+          initialTimers[entry.id] = entry.remaining_time;
+        }
+      });
+      setTimers(initialTimers);
     } catch (error) {
       console.error('Error fetching queue data:', error);
+      setQueue([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // Handle requeue action
-  const handleRequeue = async (id) => {
-    try {
-      const response = await fetch('http://localhost:3002/api/queue/requeue', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ id }),
-      });
-      const result = await response.json();
-      alert(result.success ? `Customer ${id} successfully requeued!` : `Failed to requeue customer ${id}.`);
-    } catch (error) {
-      console.error('Error requeuing customer:', error);
-    }
-  };
-
   useEffect(() => {
-    console.log('Connecting to Socket.IO...');
-
-    // Correct namespace connection
-    const socket = io('http://localhost:3002/queue'); // Connect to the "/queue" namespace
-
     fetchQueue();
 
-    // Set up Socket.IO listeners
-    socket.on('queueUpdate', (updatedQueue) => setQueue(updatedQueue));
+    // Set up Socket.IO listener for live updates
+    socket.on('queueUpdate', (updatedQueue) => {
+      setQueue(updatedQueue);
 
-    // Clean up socket connection
+      // Update timers for "playing" customers
+      const updatedTimers = {};
+      updatedQueue.forEach((entry) => {
+        if (entry.status === 'playing' && entry.remaining_time) {
+          updatedTimers[entry.id] = entry.remaining_time;
+        }
+      });
+      setTimers(updatedTimers);
+    });
+
     return () => {
-      socket.disconnect();
+      socket.off('queueUpdate');
     };
+  }, []);
+
+  // Countdown for remaining time
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTimers((prevTimers) => {
+        const updatedTimers = { ...prevTimers };
+        Object.keys(updatedTimers).forEach((key) => {
+          if (updatedTimers[key] > 0) {
+            updatedTimers[key] -= 1;
+          }
+        });
+        return updatedTimers;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
   }, []);
 
   return (
@@ -70,46 +87,38 @@ const Queue = () => {
         Game Center Queue
       </Typography>
       {loading ? (
-        <div style={{ textAlign: 'center', marginTop: '20px' }}>
-          <CircularProgress />
-        </div>
-      ) : queue.length > 0 ? (
+        <Typography variant="h6" align="center">
+          Loading...
+        </Typography>
+      ) : (
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell>Position</TableCell>
-              <TableCell>Customer</TableCell>
+              <TableCell>Queue ID</TableCell>
+              <TableCell>Customer ID</TableCell>
               <TableCell>Game</TableCell>
               <TableCell>Status</TableCell>
-              <TableCell>Actions</TableCell>
+              <TableCell>PC</TableCell>
+              <TableCell>Remaining Time</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {queue.map((customer, index) => (
-              <TableRow key={customer.id}>
-                <TableCell>{index + 1}</TableCell>
-                <TableCell>{customer.customer_name}</TableCell>
-                <TableCell>{customer.game}</TableCell>
-                <TableCell>{customer.status}</TableCell>
+            {queue.map((entry) => (
+              <TableRow key={entry.id}>
+                <TableCell>{entry.id}</TableCell>
+                <TableCell>{entry.customer?.id || 'N/A'}</TableCell>
+                <TableCell>{entry.game?.title || 'N/A'}</TableCell>
+                <TableCell>{entry.status || 'Waiting'}</TableCell>
+                <TableCell>{entry.pc?.id ? `PC-${entry.pc.id}` : 'Unassigned'}</TableCell>
                 <TableCell>
-                  {customer.status === 'Waiting' ? (
-                    <Button variant="contained" color="primary" onClick={() => handleRequeue(customer.id)}>
-                      Requeue
-                    </Button>
-                  ) : (
-                    <Button variant="outlined" color="secondary" disabled>
-                      Playing
-                    </Button>
-                  )}
+                  {timers[entry.id] > 0
+                    ? `${Math.floor(timers[entry.id] / 60)}m ${timers[entry.id] % 60}s`
+                    : 'N/A'}
                 </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
-      ) : (
-        <Typography variant="h6" align="center">
-          No customers in the queue.
-        </Typography>
       )}
     </Container>
   );

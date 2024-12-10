@@ -8,12 +8,16 @@ const PaymentForm = ({ cartTotal }) => {
   const [customerId, setCustomerId] = useState(null);
   const [paymentMethods, setPaymentMethods] = useState([{ method: 'cash', amount: cartTotal }]);
   const [remainingAmount, setRemainingAmount] = useState(cartTotal);
+  const [error, setError] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     const totalPaid = paymentMethods.reduce((sum, method) => sum + parseFloat(method.amount || 0), 0);
     setRemainingAmount(cartTotal - totalPaid);
   }, [paymentMethods, cartTotal]);
+
+  const validateEmail = (email) => /\S+@\S+\.\S+/.test(email);
+  const validatePhone = (phone) => /^\d{10,15}$/.test(phone);
 
   const handleAddPaymentMethod = () => {
     if (remainingAmount > 0) {
@@ -29,31 +33,36 @@ const PaymentForm = ({ cartTotal }) => {
 
   const handleCustomerSetup = useCallback(async () => {
     try {
-      const response = await fetch('http://localhost:3002/api/customers', {
+      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/customers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...(email && { email }), ...(phone && { phone }) }),
       });
+
+      if (!response.ok) throw new Error('Failed to create or fetch customer');
+
       const data = await response.json();
       setCustomerId(data.customer_id);
     } catch (error) {
       console.error('Error fetching or creating customer:', error);
+      setError('Failed to fetch customer details. Please try again.');
     }
   }, [email, phone]);
-  
+
   useEffect(() => {
-    if (email || phone) {
-      handleCustomerSetup();
-    }
-  }, [handleCustomerSetup]);
-  
+    const timer = setTimeout(() => {
+      if (email || phone) handleCustomerSetup();
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [email, phone, handleCustomerSetup]);
 
   const handlePaymentSubmit = async (event) => {
     event.preventDefault();
 
     const totalPaid = paymentMethods.reduce((sum, method) => sum + parseFloat(method.amount || 0), 0);
     if (totalPaid !== cartTotal) {
-      alert("Total payment must equal the cart total.");
+      alert('Total payment must equal the cart total.');
       return;
     }
 
@@ -61,13 +70,14 @@ const PaymentForm = ({ cartTotal }) => {
       const responses = await Promise.all(
         paymentMethods.map(async ({ method, amount }) => {
           if (method === 'cash') {
-            const response = await fetch('http://localhost:3002/api/cash-payment', {
+            const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/cash-payment`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ amount, customerId }),
+              body: JSON.stringify({ amount, customerId: parseInt(customerId, 10) }),
             });
-            const data = await response.json();
-            return data.success ? { success: true } : { success: false };
+
+            if (!response.ok) throw new Error('Failed cash payment');
+            return { success: true };
           } else if (method === 'stripe') {
             navigate('/PaymentPage', { state: { amount, email, phone, customerId } });
             return { success: true };
@@ -76,15 +86,15 @@ const PaymentForm = ({ cartTotal }) => {
         })
       );
 
-      if (responses.every(response => response.success)) {
-        alert("Payment successful!");
+      if (responses.every((response) => response.success)) {
+        alert('Payment successful!');
         navigate('/QueueStatus', { state: { paymentStatus: 'success', email, phone, totalPaid, customerId } });
       } else {
-        alert("Some payments failed. Please try again.");
+        alert('Some payments failed. Please try again.');
       }
     } catch (error) {
       console.error('Error during payment:', error);
-      alert("There was an error processing your payment.");
+      alert('There was an error processing your payment.');
     }
   };
 
@@ -96,7 +106,9 @@ const PaymentForm = ({ cartTotal }) => {
         id="email"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
+        placeholder="Enter email (optional)"
       />
+      {!validateEmail(email) && email && <p className="error">Invalid email format</p>}
 
       <label htmlFor="phone">Phone Number:</label>
       <input
@@ -104,8 +116,10 @@ const PaymentForm = ({ cartTotal }) => {
         id="phone"
         value={phone}
         onChange={(e) => setPhone(e.target.value)}
+        placeholder="Enter phone number"
         required
       />
+      {!validatePhone(phone) && phone && <p className="error">Invalid phone number</p>}
 
       <label htmlFor="cartTotal">Cart Total:</label>
       <input type="number" id="cartTotal" value={cartTotal} disabled />
@@ -145,6 +159,8 @@ const PaymentForm = ({ cartTotal }) => {
       <button type="submit" disabled={remainingAmount > 0}>
         Pay Now
       </button>
+
+      {error && <p className="error">{error}</p>}
     </form>
   );
 };

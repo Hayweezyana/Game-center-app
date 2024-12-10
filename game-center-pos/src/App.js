@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState} from 'react';
 import { BrowserRouter as Router, Route, Routes, useNavigate } from 'react-router-dom';
 import { Elements } from '@stripe/react-stripe-js';
 import { loadStripe } from '@stripe/stripe-js';
 import axios from 'axios';
 import GameSelection from './components/GameSelection';
+import AdminLogin from './components/admin/AdminLogin.js';
+import EditGameDuration from './components/admin/EditGameDuration';
+import Reports from './components/admin/Reports';
 import PaymentForm from './components/PaymentForm';
-import PaymentPage from './components/PaymentPage';
 import QueueStatus from './components/QueueStatus';
 import Queue from './components/Queue';
 import Checkout from './components/Checkout';
@@ -29,10 +31,10 @@ function App() {
   const { paymentStatus, isPaymentSuccessful, setIsPaymentSuccessful, processPayment } = usePayment();
   const { queue, queueStatus, addToQueue, updateQueueStatus } = useQueue();
 
-  useNavigateOnCondition(isPaymentSuccessful, '/queue-status');
+  useNavigateOnCondition(isPaymentSuccessful, '/QueueStatus');
   const navigate = useNavigate();
 
-  axios.defaults.baseURL = 'http://localhost:3002';
+  axios.defaults.baseURL = process.env.REACT_APP_BACKEND_URL;
 
   const handleGameSelection = async (game) => {
     setSelectedGame(game);
@@ -56,21 +58,19 @@ function App() {
 
       {loading && <p>Loading games...</p>}
       {error && <p>Error loading games: {error.message}</p>}
-      {data && (
-        <ul>
-          {data.map((game) => (
-            <li key={game.id}>
-              {game.title} - ₦{game.price}
-            </li>
-          ))}
-        </ul>
-      )}
       {selectedGame && <h2>Selected Game: {selectedGame.name}</h2>}
-      <h3>Payment Status: {paymentStatus}</h3>
+
 
       <Routes>
+        
+        <Route path="/admin/AdminLogin" element={<AdminLogin />} />
+        <Route path="/admin/EditGameDuration" element={<EditGameDuration />} />
+        <Route path="/reports" element={<Reports />} />
+        
         <Route path="/" element={<GameSelection onGameSelect={handleGameSelection} onCheckout={handleCheckout} />} />
+        
         <Route path="/Checkout" element={<Checkout cart={cart} onCheckout={handleCheckout} />} />
+        
         
         {/* Conditionally render PaymentForm based on clientSecret availability */}
         <Route
@@ -85,13 +85,12 @@ function App() {
             )
           }
         />
-
-        <Route path="/PaymentPage" element={<PaymentPage />} /> {/* New PaymentPage route */}
         
         <Route path="/QueueStatus" element={<QueueStatus status={queueStatus} onProceedToQueue={() => navigate('/queue')} />} />
         <Route path="/Queue" element={<Queue queue={queue} />} />
         <Route path="/ClientPC" element={<ClientPC />} />
         <Route path="/ServerPC" element={<ServerPC />} />
+        
       </Routes>
     </div>
   );

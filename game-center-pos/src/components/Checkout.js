@@ -1,15 +1,12 @@
 import React from 'react';
 import { useLocation } from 'react-router-dom';
 import PaymentForm from './PaymentForm';
-import io from 'socket.io-client';
-
-// Connect to the default namespace
-const socket = io('http://localhost:3002');
+import { useNavigate } from 'react-router-dom';
 
 const Checkout = () => {
   const location = useLocation();
   const { checkoutCart, cartTotal } = location.state || { checkoutCart: [], cartTotal: 0 };
-
+  const navigate = useNavigate();
   return (
     <div>
       <h1>Checkout</h1>
@@ -27,6 +24,12 @@ const Checkout = () => {
           ))}
         </ul>
       </div>
+      <button
+  onClick={() => navigate('/Queue', { state: { checkoutCart } })}
+>
+  Proceed to Queue
+</button>
+
     </div>
   );
 };

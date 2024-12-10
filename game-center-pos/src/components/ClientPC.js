@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import io from 'socket.io-client';
 
-const socket = io('http://localhost:3002');
+const socket = io(process.env.REACT_APP_BACKEND_URL);
 
 function ClientPC() {
   const [assignedCustomer, setAssignedCustomer] = useState(null);
